@@ -139,6 +139,42 @@ document.querySelector('.lightbox-prev').addEventListener('click', () => moveGal
 document.querySelector('.lightbox-next').addEventListener('click', () => moveGallery(1));
 thumbnails.addEventListener('click', event => { const button = event.target.closest('[data-thumb]'); if (button) { currentImage = Number(button.dataset.thumb); renderGalleryImage(); } });
 lightbox.addEventListener('keydown', event => { if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); moveGallery(event.key === 'ArrowRight' ? 1 : -1); } });
+// Swipe or drag the main image sideways to change photo. Vertical movement still scrolls the dialog.
+const stage = document.querySelector('.lightbox-stage');
+let swipe = null;
+function endSwipe(commit) {
+  if (!swipe) return;
+  const { dx, horizontal } = swipe;
+  swipe = null;
+  stage.classList.remove('dragging');
+  if (commit && horizontal && Math.abs(dx) > 45) {
+    const direction = dx < 0 ? 1 : -1;
+    moveGallery(direction);
+    // Start the new photo slightly off to the side it arrives from, then let it settle.
+    lightboxImage.style.transition = 'none';
+    lightboxImage.style.transform = `translateX(${direction * 60}px)`;
+    lightboxImage.getBoundingClientRect();
+    lightboxImage.style.transition = '';
+  }
+  lightboxImage.style.transform = '';
+}
+stage.addEventListener('pointerdown', event => { if (event.button === 0 && !event.target.closest('button')) swipe = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, horizontal: false }; });
+stage.addEventListener('pointermove', event => {
+  if (!swipe || event.pointerId !== swipe.id) return;
+  swipe.dx = event.clientX - swipe.x;
+  if (!swipe.horizontal) {
+    const dy = event.clientY - swipe.y;
+    if (Math.abs(swipe.dx) < 8 && Math.abs(dy) < 8) return;
+    if (Math.abs(swipe.dx) <= Math.abs(dy)) { swipe = null; return; }
+    swipe.horizontal = true;
+    stage.setPointerCapture(swipe.id);
+    stage.classList.add('dragging');
+  }
+  lightboxImage.style.transform = `translateX(${swipe.dx}px)`;
+});
+stage.addEventListener('pointerup', () => endSwipe(true));
+stage.addEventListener('pointercancel', () => endSwipe(false));
+lightboxImage.addEventListener('dragstart', event => event.preventDefault());
 lightbox.addEventListener('click', event => { if (event.target !== lightbox) return; const bounds = lightbox.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) lightbox.close(); });
 lightbox.addEventListener('close', () => { document.body.classList.remove('modal-open'); galleryOpener?.focus({ preventScroll: true }); });
 document.querySelector('#year').textContent = new Date().getFullYear();
